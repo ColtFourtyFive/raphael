@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}replays{% endblock %}
+{% block body %}
+<h3>Replay runs</h3>
+<p class="muted">Start one with <code>atp replay --agent rsi-ma-basic --date YYYY-MM-DD --speed 20</code></p>
+<div class="wrap"><table><tr><th>Started</th><th>Run</th><th>Agent</th><th>Copies</th><th>Decisions</th><th>Orders</th><th>P&amp;L (copy 1)</th></tr>
+{% for r in runs %}<tr><td class="muted">{{ r.created.strftime('%Y-%m-%d %H:%M') }}</td><td><a href="/instances/{{ r.first }}"><code>{{ r.run_id|string|truncate(13, True, '') }}</code></a></td>
+<td>{{ r.agent }}</td><td>{{ r.copies }}</td><td><a href="/decisions?instance={{ r.first }}">{{ r.decisions }}</a></td><td>{{ r.orders }}</td><td>{{ '%.2f'|format(r.pnl) }}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">No replays yet.</td></tr>{% endfor %}</table></div>
+{% endblock %}

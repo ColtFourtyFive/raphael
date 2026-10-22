@@ -1,0 +1,29 @@
+{% extends "base.html" %}{% block title %}instances{% endblock %}
+{% block body %}
+{% if kill %}<div class="banner">GLOBAL KILL SWITCH IS ON: no new orders will be sent.
+<form method="post" action="/kill-switch"><input type="hidden" name="on" value="false"><button>Release</button></form></div>
+{% else %}
+<p><form method="post" action="/kill-switch" onsubmit="return confirm('Stop all trading and cancel every open order?')">
+<input type="hidden" name="on" value="true"><button class="danger">Global kill switch</button></form>
+{% if pending %} <a href="/approvals" class="amber">{{ pending }} order(s) awaiting approval</a>{% endif %}</p>
+{% endif %}
+<div class="wrap"><table>
+<tr><th>Instance</th><th>Agent</th><th>Mode</th><th>Status</th><th>Realized P&amp;L</th><th>AI cost</th><th>Last reconcile</th><th></th></tr>
+{% for r in rows %}{% set i = r.i %}
+<tr>
+<td><a href="/instances/{{ i.id }}"><code>{{ i.id|string|truncate(13, True, '') }}</code></a></td>
+<td>{{ i.agent_id }}@{{ i.version }}</td>
+<td>{% if i.mode == 'alpaca_live' %}<b class="red">LIVE</b>{% else %}{{ i.mode }}{% endif %}</td>
+<td class="{{ 'green' if i.status=='running' else 'red' if i.status=='killed' else 'amber' }}">{{ i.status }}<br><span class="muted">{{ i.status_reason or '' }}</span></td>
+<td>{{ '%.2f'|format(r.pnl) }}</td><td>${{ '%.4f'|format(r.cost) }}</td>
+<td>{% if r.recon %}<span class="{{ 'green' if r.recon.status=='clean' else 'red' }}">{{ r.recon.status }}</span> <span class="muted">{{ r.recon.ts.strftime('%m-%d %H:%M') }}</span>{% else %}<span class="muted">never</span>{% endif %}</td>
+<td>
+{% if i.status != 'killed' %}
+{% if i.status != 'running' %}<form method="post" action="/instances/{{ i.id }}/start"><button>Start</button></form>{% endif %}
+{% if i.status == 'running' %}<form method="post" action="/instances/{{ i.id }}/pause"><button>Pause</button></form>{% endif %}
+<form method="post" action="/instances/{{ i.id }}/kill" onsubmit="return confirm('Kill this instance and cancel its open orders?')"><button class="danger">Kill</button></form>
+{% endif %}
+</td></tr>
+{% else %}<tr><td colspan="8" class="muted">No paper or live instances. Create one with <code>atp instance create</code>.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

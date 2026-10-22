@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}approvals{% endblock %}
+{% block body %}
+<h3>Pending approvals</h3>
+<table><tr><th>Created</th><th>Order</th><th></th></tr>
+{% for o in rows %}<tr><td class="muted">{{ o.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+<td><a href="/orders/{{ o.id }}">{{ o.side }} {{ o.symbol }} {{ ('qty ' ~ o.qty.normalize()) if o.qty is not none else ('$' ~ o.notional.normalize()) }}</a></td>
+<td><form method="post" action="/approvals/{{ o.id }}"><input type="hidden" name="approve" value="true"><button>Approve</button></form>
+<form method="post" action="/approvals/{{ o.id }}"><input type="hidden" name="approve" value="false"><button class="danger">Reject</button></form></td></tr>
+{% else %}<tr><td colspan="3" class="muted">Nothing waiting.</td></tr>{% endfor %}</table>
+{% endblock %}

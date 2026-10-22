@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block title %}decisions{% endblock %}
+{% block body %}
+<h3>Decision log{% if instance %} · <code>{{ instance }}</code>{% endif %}</h3>
+<div class="wrap"><table><thead><tr><th>Bar</th><th>Symbol</th><th>Action</th><th>Inputs</th><th>Reasoning</th><th>Cost</th></tr></thead>
+<tbody hx-get="/decisions{% if instance %}?instance={{ instance }}{% endif %}" hx-trigger="every 10s" hx-swap="innerHTML">
+{% include "decision_rows.html" %}</tbody></table></div>
+{% endblock %}

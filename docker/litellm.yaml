@@ -1,0 +1,17 @@
+# LiteLLM gateway config. Agents name a model; the gateway maps it to a provider.
+model_list:
+  - model_name: claude-haiku-5-5
+    litellm_params:
+      model: anthropic/claude-haiku-5-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+      temperature: 0
+
+  # Deterministic stand-in for tests and keyless local runs. Never calls a provider.
+  - model_name: mock-take
+    litellm_params:
+      model: openai/mock-take
+      api_key: not-used
+      mock_response: "TAKE: oversold bounce above the 50-bar trend looks reasonable."
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

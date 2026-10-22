@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block title %}{{ inst.agent_id }}{% endblock %}
+{% block body %}
+<h3>{{ inst.agent_id }}@{{ inst.version }} · {{ inst.mode }} · {{ inst.status }}</h3>
+<p class="muted"><code>{{ inst.id }}</code> · ledger cash {{ '%.2f'|format(cash) }} · <a href="/decisions?instance={{ inst.id }}">decision log</a></p>
+<h4>Positions</h4>
+<table><tr><th>Symbol</th><th>Qty</th><th>Avg price</th><th>Updated</th></tr>
+{% for p in positions %}<tr><td>{{ p.symbol }}</td><td>{{ p.qty.normalize() }}</td><td>{{ p.avg_price.normalize() }}</td><td class="muted">{{ p.updated_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
+{% else %}<tr><td colspan="4" class="muted">flat</td></tr>{% endfor %}</table>
+<h4>Orders</h4>
+<div class="wrap"><table><tr><th>Created</th><th>Side</th><th>Symbol</th><th>Size</th><th>State</th><th>Fill</th></tr>
+{% for o in orders %}<tr><td><a href="/orders/{{ o.id }}">{{ o.created_at.strftime('%Y-%m-%d %H:%M') }}</a></td><td>{{ o.side }}</td><td>{{ o.symbol }}</td>
+<td>{{ ('qty ' ~ o.qty.normalize()) if o.qty is not none else ('$' ~ o.notional.normalize()) }}</td><td>{{ o.state }}</td>
+<td>{% if o.filled_avg_price %}{{ o.filled_qty.normalize() }} @ {{ o.filled_avg_price.normalize() }}{% endif %}</td></tr>{% endfor %}</table></div>
+<h4>Reconciliation</h4>
+<table>{% for r in recon %}<tr><td class="muted">{{ r.ts.strftime('%Y-%m-%d %H:%M:%S') }}</td><td class="{{ 'green' if r.status=='clean' else 'red' }}">{{ r.status }}</td><td><code>{{ r.diffs_json or '' }}</code></td></tr>{% endfor %}</table>
+{% endblock %}

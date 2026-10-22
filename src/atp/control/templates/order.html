@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block title %}order{% endblock %}
+{% block body %}
+<h3>{{ o.side }} {{ o.symbol }} · {{ o.state }}</h3>
+<p class="muted">client_order_id <code>{{ o.client_order_id }}</code> · broker <code>{{ o.broker_order_id or '-' }}</code>{% if o.reject_reason %} · <span class="red">{{ o.reject_reason }}</span>{% endif %}</p>
+<h4>State history</h4>
+<table><tr><th>At</th><th>From</th><th>To</th><th>Detail</th></tr>
+{% for e in events %}<tr><td class="muted">{{ e.ts.strftime('%Y-%m-%d %H:%M:%S') }}</td><td>{{ e.from_state or '' }}</td><td>{{ e.to_state }}</td><td><code>{{ e.payload or '' }}</code></td></tr>{% endfor %}</table>
+{% if d %}<h4>Decision</h4><p>{{ d.action }} · {{ d.reasoning }}</p>
+<p class="muted">rules: {{ d.rule_result.detail|join(' · ') }}</p>
+{% if d.model_output %}<p>model: <code>{{ d.model_output }}</code> (${{ d.cost_usd }})</p>{% endif %}
+<h4>Risk checks</h4><table>{% for r in risks %}<tr><td>{{ r.rule }}</td><td class="{{ 'green' if r.outcome=='pass' else 'red' }}">{{ r.outcome }}</td><td class="muted">{{ r.detail }}</td></tr>{% endfor %}</table>{% endif %}
+{% endblock %}

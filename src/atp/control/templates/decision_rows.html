@@ -1,0 +1,6 @@
+{% for d in rows %}<tr>
+<td class="muted">{{ d.bar_ts.strftime('%m-%d %H:%M') }}</td><td>{{ d.symbol }}</td>
+<td class="{{ 'green' if d.action in ('buy','sell') else 'red' if d.action=='blocked' else 'amber' if d.action=='pending' else 'muted' }}">{{ d.action }}</td>
+<td><pre>{% for k, v in d.inputs_json.indicators.items() %}{{ k }}={{ '%.2f'|format(v) if v is not none else 'n/a' }} {% endfor %}close={{ d.inputs_json.bar.close }}</pre></td>
+<td>{{ d.reasoning }}{% if d.model_output %}<br><span class="muted">model: {{ d.model_output }}</span>{% endif %}</td>
+<td class="muted">{{ d.latency_ms }}ms · ${{ '%.5f'|format(d.cost_usd) }}</td></tr>{% endfor %}

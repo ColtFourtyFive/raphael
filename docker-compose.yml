@@ -1,0 +1,91 @@
+# Local development only. Never used in AWS (see infra/terraform).
+#   docker compose up -d                       # Postgres, NATS, LiteLLM
+#   docker compose --profile app up -d --build # plus every atp service
+#
+# Images come from mirror.gcr.io to dodge Docker Hub pull limits; they are the
+# official Docker Hub library images.
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  image: atp:local
+  profiles: ["app"]
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    DATABASE_URL: postgresql+psycopg://atp:atp@postgres:5432/atp
+    NATS_URL: nats://nats:4222
+    LITELLM_BASE_URL: http://litellm:4000
+  depends_on:
+    postgres:
+      condition: service_healthy
+    nats:
+      condition: service_started
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: mirror.gcr.io/library/postgres:16-alpine
+    environment:
+      POSTGRES_USER: atp
+      POSTGRES_PASSWORD: atp
+      POSTGRES_DB: atp
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atp -d atp"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  nats:
+    image: mirror.gcr.io/library/nats:2.10-alpine
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports: ["4222:4222", "8222:8222"]
+    volumes: [natsdata:/data]
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-local-dev}
+    volumes: ["./docker/litellm.yaml:/app/config.yaml:ro"]
+    ports: ["4000:4000"]
+
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  watch:
+    <<: *app
+    command: ["atp", "run", "watch"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+  worker:
+    <<: *app
+    command: ["atp", "run", "worker"]
+    deploy: {replicas: 2}
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+  reconciler:
+    <<: *app
+    command: ["atp", "run", "reconciler"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+  panel:
+    <<: *app
+    command: ["atp", "run", "panel", "--host", "0.0.0.0", "--port", "8000"]
+    ports: ["8000:8000"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+volumes:
+  pgdata:
+  natsdata:

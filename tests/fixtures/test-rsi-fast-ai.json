@@ -1,0 +1,74 @@
+{
+  "agent_id": "test-rsi-fast-ai",
+  "version": 1,
+  "name": "TEST ONLY: RSI(5) dip with AI filter",
+  "universe": [
+    "SPY",
+    "QQQ",
+    "AAPL",
+    "MSFT",
+    "NVDA"
+  ],
+  "schedule": {
+    "timeframe": "5Min",
+    "session": "regular"
+  },
+  "indicators": [
+    {
+      "id": "rsi5",
+      "type": "RSI",
+      "period": 5
+    },
+    {
+      "id": "sma50",
+      "type": "SMA",
+      "period": 50
+    }
+  ],
+  "entry": {
+    "all": [
+      {
+        "lhs": "rsi5",
+        "op": "<",
+        "rhs": 30
+      },
+      {
+        "lhs": "close",
+        "op": ">",
+        "rhs": "sma50"
+      }
+    ]
+  },
+  "exit": {
+    "any": [
+      {
+        "lhs": "rsi5",
+        "op": ">",
+        "rhs": 70
+      },
+      {
+        "type": "stop_loss_pct",
+        "value": 1.0
+      },
+      {
+        "type": "take_profit_pct",
+        "value": 2.0
+      }
+    ]
+  },
+  "sizing": {
+    "type": "fixed_notional",
+    "usd": 200
+  },
+  "ai_filter": {
+    "model": "claude-haiku-5-5",
+    "prompt": "Given this signal snapshot (symbol, price, indicators, recent bars), answer TAKE or SKIP with one sentence of reasoning.",
+    "fail_mode": "skip"
+  },
+  "guardrails": {
+    "max_position_usd": 500,
+    "max_open_positions": 3,
+    "max_daily_loss_usd": 50,
+    "approval_mode": "auto"
+  }
+}

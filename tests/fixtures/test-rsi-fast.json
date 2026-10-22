@@ -1,0 +1,70 @@
+{
+  "agent_id": "test-rsi-fast",
+  "version": 1,
+  "name": "TEST ONLY: RSI(5) dip above SMA50, rules only",
+  "universe": [
+    "SPY",
+    "QQQ",
+    "AAPL",
+    "MSFT",
+    "NVDA"
+  ],
+  "schedule": {
+    "timeframe": "5Min",
+    "session": "regular"
+  },
+  "indicators": [
+    {
+      "id": "rsi5",
+      "type": "RSI",
+      "period": 5
+    },
+    {
+      "id": "sma50",
+      "type": "SMA",
+      "period": 50
+    }
+  ],
+  "entry": {
+    "all": [
+      {
+        "lhs": "rsi5",
+        "op": "<",
+        "rhs": 30
+      },
+      {
+        "lhs": "close",
+        "op": ">",
+        "rhs": "sma50"
+      }
+    ]
+  },
+  "exit": {
+    "any": [
+      {
+        "lhs": "rsi5",
+        "op": ">",
+        "rhs": 70
+      },
+      {
+        "type": "stop_loss_pct",
+        "value": 1.0
+      },
+      {
+        "type": "take_profit_pct",
+        "value": 2.0
+      }
+    ]
+  },
+  "sizing": {
+    "type": "fixed_notional",
+    "usd": 200
+  },
+  "ai_filter": null,
+  "guardrails": {
+    "max_position_usd": 500,
+    "max_open_positions": 3,
+    "max_daily_loss_usd": 50,
+    "approval_mode": "auto"
+  }
+}
