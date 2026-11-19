@@ -42,11 +42,12 @@ def fills_only(tape: list[dict[str, Any]]) -> list[dict[str, Any]]:
 async def assert_no_duplicate_orders(svc: Services, instance_id: uuid.UUID) -> None:
     async with svc.factory() as s:
         per_decision = await s.execute(
-            select(Order.decision_id, func.count())
+            select(Order.decision_id, Order.purpose, func.count())
             .where(Order.instance_id == instance_id)
-            .group_by(Order.decision_id)
+            .group_by(Order.decision_id, Order.purpose)
         )
-        assert all(n == 1 for _, n in per_decision)
+        # one signal order per decision, plus at most one protective stop for its entry
+        assert all(n == 1 for _, _, n in per_decision)
         ours = await s.scalar(select(func.count()).select_from(Order).where(Order.instance_id == instance_id))
         theirs = await s.scalar(
             select(func.count()).select_from(PaperOrder).where(PaperOrder.account_ref == str(instance_id))

@@ -36,13 +36,14 @@ COOKIE = "atp_admin"
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.factory = session_factory()
+    nc = None
     try:
-        app.state.nc, app.state.js = await bus.connect(name="atp-panel")
+        nc, app.state.js = await bus.connect(name="atp-panel")
     except Exception:  # panel still works read-only without NATS
-        app.state.nc, app.state.js = None, None
+        app.state.js = None
     yield
-    if app.state.nc is not None:
-        await app.state.nc.drain()
+    if nc is not None and not nc.is_closed:
+        await nc.drain()
 
 
 app = FastAPI(title="atp control panel", lifespan=lifespan)
@@ -224,7 +225,10 @@ async def replays(request: Request) -> Response:
         runs = []
         for run_id, agent_id, version, created, copies in rows:
             first = await s.scalar(
-                select(Instance.id).where(Instance.run_id == run_id).order_by(Instance.created_at, Instance.id).limit(1)
+                select(Instance.id)
+                .where(Instance.run_id == run_id)
+                .order_by(Instance.created_at, Instance.id)
+                .limit(1)
             )
             n_dec = await s.scalar(
                 select(func.count()).select_from(Decision).where(Decision.instance_id == first)

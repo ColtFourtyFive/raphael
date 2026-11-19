@@ -203,7 +203,7 @@ async def trade_tape(
             .join(Order, Order.decision_id == Decision.id, isouter=True)
             .join(Fill, Fill.order_id == Order.id, isouter=True)
             .where(Decision.instance_id == instance_id)
-            .order_by(Decision.bar_ts, Decision.symbol)
+            .order_by(Decision.bar_ts, Decision.symbol, Order.purpose, Order.created_at, Fill.ts)
         )
         return [
             {
