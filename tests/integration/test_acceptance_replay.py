@@ -17,6 +17,7 @@ from atp import store
 from atp.backtest.reference import run_reference
 from atp.db.models import Decision, Order, PaperOrder, Position
 from atp.marketdata.base import load_bars, load_lookback, session_bounds
+from atp.orders import OPEN_STATES
 from atp.replay import run_replay, trade_tape
 from atp.watch.engine import WatchEngine
 from atp.worker.ai import AIFilterRunner
@@ -63,6 +64,13 @@ async def test_replay_parity_with_reference_and_reruns(services: Services) -> No
     b = await replay(services)
     assert a.orders > 0 and a.fills > 0, "fixture day must trade for parity to mean anything"
     assert a.reconcile == {"clean": 1} and b.reconcile == {"clean": 1}
+    async with services.factory() as s:  # the day is over: DAY orders expired, nothing left open
+        still_open = await s.scalar(
+            select(func.count())
+            .select_from(Order)
+            .where(Order.instance_id.in_([*a.instance_ids, *b.instance_ids]), Order.state.in_(OPEN_STATES))
+        )
+    assert still_open == 0
 
     tape_a = await trade_tape(services.factory, a.instance_ids[0])
     tape_b = await trade_tape(services.factory, b.instance_ids[0])

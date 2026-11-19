@@ -24,10 +24,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from atp import bus, store
+from atp.brokers.factory import broker_for
 from atp.clock import SimClock
 from atp.control.actions import create_instance
 from atp.db.models import Decision, Fill, Instance, Order
 from atp.marketdata.base import load_bars, session_bounds
+from atp.orders import OrderManager
 from atp.reconcile import reconcile_instance
 from atp.schema.messages import Bar
 
@@ -135,11 +137,32 @@ async def run_replay(
     async with factory() as s, s.begin():
         for iid in ids:
             await store.set_instance_status(s, iid, "completed", "replay finished")
+    await expire_day_orders(factory, ids, clock)
     recon: dict[str, int] = {}
     for iid in ids:
         run = await reconcile_instance(factory, iid, js, clock=clock, pause_on_mismatch=False)
         recon[run.status] = recon.get(run.status, 0) + 1
     return await summarize(factory, run_id, len(bars), recon, max_lag, time.monotonic() - wall_start)
+
+
+async def expire_day_orders(
+    factory: async_sessionmaker[AsyncSession], ids: list[uuid.UUID], clock: SimClock
+) -> None:
+    """The replayed session is over: close out what was still open, as DAY orders expire at
+    the close. Positions stay as they were at the end of the day."""
+    sem = asyncio.Semaphore(8)
+
+    async def one(iid: uuid.UUID) -> None:
+        async with sem:
+            async with factory() as s:
+                inst = await s.get(Instance, iid)
+            assert inst is not None
+            broker = await broker_for(inst, factory, clock)
+            await OrderManager(factory, clock).cancel_open(
+                iid, broker, "replay day ended (DAY orders expire)"
+            )
+
+    await asyncio.gather(*(one(i) for i in ids))
 
 
 async def summarize(
