@@ -61,6 +61,7 @@ These came directly from Ayan's answers and should not be reopened without a rea
 - [ ] Pricing: credit price, plan tiers, and margin over model cost
 - [ ] Market data: Databento display terms vs EODHD's reported free redistribution
 - [ ] Success measures to adopt
+- [ ] v0 example agent: RSI(14) < 30 almost never coincides with close > SMA(50) (a 14-bar oversold reading usually means price already fell through the 50-bar average), so `rsi-ma-basic` may barely trade. Keep it, or loosen it (e.g. RSI(5) < 30 as in `tests/fixtures/test-rsi-fast.json`, or RSI(14) < 35)? Check on real Alpaca bars first.
 
 ## Later backlog
 

@@ -58,13 +58,28 @@ docker/
 ```
 
 ## Commands
-(Fill in as they're created.)
 - Install: `uv sync`
-- Local services: `docker compose up -d`
+- Local services: `docker compose up -d` (Postgres, NATS, LiteLLM); full stack in containers: `docker compose --profile app up -d --build`
 - Migrate: `uv run alembic upgrade head`
-- Tests: `uv run pytest`
-- Lint/type-check: `uv run ruff check . && uv run mypy src`
+- Streams: `uv run atp init-bus`
+- Tests: `uv run pytest` (integration tests need the compose services and **wipe the NATS streams**; they use the `atp_test` database)
+- Lint/type-check: `uv run ruff check . && uv run ruff format --check . && uv run mypy src`
 - CLI: `uv run atp --help`
+- Load agents: `uv run atp agent load agents/examples/*.json`
+- Bars: `uv run atp bars fetch --start D --end D` (Alpaca) or `uv run atp bars synth --start D --end D` (synthetic, keyless)
+- Replay: `uv run atp replay --agent rsi-ma-basic --date 2026-10-14 --speed 20 --inline`
+- Burst test: `uv run python scripts/burst.py --copies 1000`
+- Services: `uv run atp run watch|worker|reconciler|marketdata|panel`
+- Kill switch: `uv run atp kill-all` (release with `--release`)
+- Terraform: `cd infra/terraform && terraform validate` (never `apply`/`destroy` without asking)
+
+## Implementation notes
+- Wake message IDs are `{instance_id}:{symbol}:{bar_ts}`: SPEC's `{instance_id}:{bar_ts}` would collide across the symbols of one instance.
+- Replay publishes one bar at a time and waits for the pipeline to drain, so re-runs are deterministic at any speed.
+- Indicators are recomputed over a fixed lookback window (`INDICATOR_LOOKBACK_BARS`, default 250), so a restarted watch engine computes exactly what an uninterrupted one would.
+- The paper broker keeps its own books (`paper_*` tables) so reconciliation compares two independent records, as with Alpaca.
+- Protective stop-loss orders rest at the broker after each entry; take-profit stays rule-based (no OCO).
+- The Messages API rejects `temperature`; replay determinism comes from `llm_cache`, not sampling.
 
 ## Conventions
 - Typed Python everywhere; Pydantic at boundaries; no untyped dicts crossing modules.
