@@ -10,7 +10,7 @@ Status key: `[x]` done and tested here · `[~]` built, but needs an account or a
 - [x] Alembic setup and first migration with all tables from SPEC §6
 - [x] Pydantic models: agent definition (SPEC §4), bar, job, decision, order
 - [x] Load and validate `agents/examples/*.json` (CLI `atp agent load`)
-- [~] CI: GitHub Actions running lint, type-check, and tests (`.github/workflows/ci.yml`; the same steps pass locally, first GitHub run pending)
+- [x] CI: GitHub Actions running lint, format, type-check, all tests, and `terraform validate` (`.github/workflows/ci.yml`, green on GitHub)
 - **Done when:** `docker compose up` plus `uv run pytest` pass on a fresh clone. ✅ (62 tests)
 
 ## M1: Data and replay (weeks 1–2)
