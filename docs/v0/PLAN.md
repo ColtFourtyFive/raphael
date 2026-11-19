@@ -50,7 +50,7 @@ Status key: `[x]` done and tested here · `[~]` built, but needs an account or a
 - **Done when:** test 10 passes and the paper agent runs from AWS. **Start the 2-week paper soak (test 2).** Blocked on an AWS account and approval to apply.
 
 ## M5: Hardening and live (weeks 5–6+)
-- [x] Market-open burst test with 1,000 instances in replay (test 7): 10,000 orders, 0 duplicates, 1,000/1,000 reconciliations clean, worst per-bar drain 33 s
+- [x] Market-open burst test with 1,000 instances in replay (test 7): 10,000 orders, 0 duplicates, 1,000/1,000 reconciliations clean, worst per-bar drain 27 s (with protective stops)
 - [x] AI cost metering per decision and per instance (test 9)
 - [~] `AlpacaBroker(live)` behind the `ALLOW_LIVE_TRADING` flag (refuses unless the flag is on and the account row is live; untested against Alpaca)
 - [ ] Go live with $100–500 for 1 week (test 8): your decision, needs live keys
