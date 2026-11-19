@@ -42,7 +42,9 @@ def fills_only(tape: list[dict[str, Any]]) -> list[dict[str, Any]]:
 async def assert_no_duplicate_orders(svc: Services, instance_id: uuid.UUID) -> None:
     async with svc.factory() as s:
         per_decision = await s.execute(
-            select(Order.decision_id, func.count()).where(Order.instance_id == instance_id).group_by(Order.decision_id)
+            select(Order.decision_id, func.count())
+            .where(Order.instance_id == instance_id)
+            .group_by(Order.decision_id)
         )
         assert all(n == 1 for _, n in per_decision)
         ours = await s.scalar(select(func.count()).select_from(Order).where(Order.instance_id == instance_id))
@@ -71,7 +73,10 @@ async def test_replay_parity_with_reference_and_reruns(services: Services) -> No
         day_bars = await load_bars(s, defn.universe, "5Min", start, end)
         warmup = [b for sym in defn.universe for b in await load_lookback(s, sym, "5Min", start, 250)]
     ref = run_reference(defn, warmup, day_bars)
-    ours = [(t["symbol"], t["side"], t["bar_ts"], Decimal(t["qty"]), Decimal(t["price"])) for t in fills_only(tape_a)]
+    ours = [
+        (t["symbol"], t["side"], t["bar_ts"], Decimal(t["qty"]), Decimal(t["price"]))
+        for t in fills_only(tape_a)
+    ]
     theirs = [(t.symbol, t.side, t.decided_at.isoformat(), t.qty, t.price) for t in ref]
     assert sorted(ours) == sorted(theirs)
 
@@ -127,7 +132,9 @@ async def test_worker_killed_mid_job_is_redelivered(services: Services, fake_cha
     assert hung["done"]
     await assert_no_duplicate_orders(services, run.instance_ids[0])
     async with services.factory() as s:
-        clean = await s.scalar(select(func.count()).select_from(Order).where(Order.instance_id == run.instance_ids[0]))
+        clean = await s.scalar(
+            select(func.count()).select_from(Order).where(Order.instance_id == run.instance_ids[0])
+        )
     assert clean == run.orders and run.reconcile == {"clean": 1}
 
 
@@ -150,6 +157,8 @@ async def test_watch_engine_restart_misses_nothing(services: Services, monkeypat
 
     monkeypatch.setattr(WatchEngine, "on_bar", crash_once_after_publish)
 
+    restarts: set[asyncio.Task[None]] = set()
+
     async def restart_at(step: int) -> None:
         if step in (15, 50):
             await services.stop_watch(hard=True)
@@ -158,7 +167,7 @@ async def test_watch_engine_restart_misses_nothing(services: Services, monkeypat
                 await asyncio.sleep(1.5)  # bars pile up in the MD stream meanwhile
                 services.start_watch()
 
-            asyncio.create_task(later())
+            restarts.add(asyncio.create_task(later()))
 
     run = await replay(services, on_step=restart_at)
     assert calls["n"] > 40
@@ -179,7 +188,9 @@ async def test_market_open_burst(services: Services) -> None:
     assert per_copy == int(per_copy), "every copy should trade identically"
     async with services.factory() as s:
         worst = await s.scalar(
-            select(func.max(func.coalesce(Order.notional, Decimal(0)))).where(Order.instance_id.in_(run.instance_ids))
+            select(func.max(func.coalesce(Order.notional, Decimal(0)))).where(
+                Order.instance_id.in_(run.instance_ids)
+            )
         )
         assert worst is None or worst <= Decimal(500)
         held = await s.execute(

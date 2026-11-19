@@ -147,7 +147,9 @@ class Services:
     def start_workers(self, worker: DecisionWorker | None = None, n: int = 2) -> None:
         w = worker or self.worker
         for _ in range(n):
-            self.worker_tasks.append(self._spawn(lambda stop: run_worker(self.js, w, concurrency=8, stop=stop)))
+            self.worker_tasks.append(
+                self._spawn(lambda stop: run_worker(self.js, w, concurrency=8, stop=stop))
+            )
 
     async def _halt(self, task: asyncio.Task[None], hard: bool) -> None:
         if hard:

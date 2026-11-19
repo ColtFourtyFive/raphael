@@ -1,0 +1,44 @@
+# Builds the arm64 image and pushes it to ECR, then rolls the ECS services.
+# Manual only. Needs repository secret AWS_DEPLOY_ROLE_ARN (an IAM role trusting GitHub OIDC
+# for this repo, allowed to push to ECR `atp` and update ECS services in cluster atp-v0).
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      roll_services:
+        description: "Force a new ECS deployment after pushing"
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER: atp-v0
+
+jobs:
+  build-push:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: build and push
+        run: |
+          IMAGE=${{ steps.ecr.outputs.registry }}/atp
+          docker build -f docker/Dockerfile -t $IMAGE:${{ github.sha }} -t $IMAGE:latest .
+          docker push $IMAGE:${{ github.sha }}
+          docker push $IMAGE:latest
+      - name: roll services
+        if: ${{ inputs.roll_services }}
+        run: |
+          for s in control watch worker reconciler marketdata; do
+            aws ecs update-service --cluster $CLUSTER --service $s --force-new-deployment >/dev/null
+          done

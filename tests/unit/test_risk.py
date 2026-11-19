@@ -11,9 +11,19 @@ G = Guardrails(max_position_usd=Decimal(500), max_open_positions=3, max_daily_lo
 OPEN = datetime(2026, 10, 14, 15, 0, tzinfo=UTC)  # 11:00 New York
 
 BASE = RiskContext(
-    instance_status="running", kill_switch=False, now=OPEN, side="buy", symbol="SPY",
-    order_notional=Decimal(200), position_value=Decimal(0), open_positions=0, holds_symbol=False,
-    daily_pnl=Decimal(0), buying_power=Decimal(10_000), open_orders_for_symbol=0, guardrails=G,
+    instance_status="running",
+    kill_switch=False,
+    now=OPEN,
+    side="buy",
+    symbol="SPY",
+    order_notional=Decimal(200),
+    position_value=Decimal(0),
+    open_positions=0,
+    holds_symbol=False,
+    daily_pnl=Decimal(0),
+    buying_power=Decimal(10_000),
+    open_orders_for_symbol=0,
+    guardrails=G,
 )
 
 
@@ -49,7 +59,10 @@ def test_each_rule_blocks(change: dict[str, object], rule: str) -> None:
 
 
 def test_adding_to_held_symbol_not_counted_as_new_position() -> None:
-    assert evaluate(replace(BASE, open_positions=3, holds_symbol=True, position_value=Decimal(100))).outcome == "approve"
+    assert (
+        evaluate(replace(BASE, open_positions=3, holds_symbol=True, position_value=Decimal(100))).outcome
+        == "approve"
+    )
 
 
 def test_exits_skip_exposure_checks_but_not_kill_switch() -> None:

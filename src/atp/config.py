@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from functools import lru_cache
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,8 +29,8 @@ class Settings(BaseSettings):
     ai_model_override: str = ""
     ai_timeout_s: float = 20.0
     # Fallback price when the gateway doesn't report cost (USD per million tokens).
-    ai_input_usd_per_mtok: Decimal = Decimal("1.00")
-    ai_output_usd_per_mtok: Decimal = Decimal("5.00")
+    ai_input_usd_per_mtok: Decimal = Decimal("0.10")  # claude-haiku-5-5, prompts <= 100K tokens
+    ai_output_usd_per_mtok: Decimal = Decimal("0.50")
 
     # Infrastructure
     database_url: str = "postgresql+psycopg://atp:atp@localhost:5432/atp"
@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     alert_webhook_url: str = ""
     sentry_dsn: str = ""
     log_level: str = "INFO"
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _unset_is_empty(cls, v: object) -> object:
+        # SSM parameters start as the literal "unset" until an operator fills them in.
+        return "" if v == "unset" else v
 
 
 @lru_cache

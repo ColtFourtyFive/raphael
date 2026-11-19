@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-type-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: atp
+          POSTGRES_PASSWORD: atp
+          POSTGRES_DB: atp
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U atp" --health-interval 2s --health-timeout 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+      - name: NATS with JetStream (service containers can't take args)
+        run: docker run -d --name nats -p 4222:4222 nats:2.10-alpine -js
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy src
+      - name: tests (unit + integration acceptance)
+        env:
+          BURST_COPIES: "100"
+        run: uv run pytest -q
+      - name: terraform validate
+        working-directory: infra/terraform
+        run: |
+          curl -sSLo /tmp/tf.zip https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip
+          unzip -q /tmp/tf.zip -d /tmp/tf
+          /tmp/tf/terraform init -backend=false -input=false
+          /tmp/tf/terraform fmt -check -recursive
+          /tmp/tf/terraform validate

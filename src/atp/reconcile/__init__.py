@@ -24,6 +24,7 @@ from atp.control.actions import publish_event
 from atp.db.models import Instance, Order, ReconciliationRun
 from atp.obs import alert
 from atp.orders import AT_BROKER_STATES, OrderManager
+from atp.orders.protect import ensure_protective_stops
 from atp.schema.messages import Event
 
 log = logging.getLogger(__name__)
@@ -47,6 +48,10 @@ async def reconcile_instance(
     try:
         broker = await broker_for(inst, factory, clock)
         await OrderManager(factory, clock).sync_instance(inst.id, broker)
+        if inst.status == "running":
+            async with factory() as s:
+                defn = await store.load_definition(s, inst.agent_id, inst.version)
+            await ensure_protective_stops(factory, inst, defn, broker, clock)
         theirs = {p.symbol: p.qty for p in await broker.get_positions()}
         their_open = {o.client_order_id for o in await broker.list_open_orders()}
         async with factory() as s:

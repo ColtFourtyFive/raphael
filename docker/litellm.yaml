@@ -4,7 +4,6 @@ model_list:
     litellm_params:
       model: anthropic/claude-haiku-5-5
       api_key: os.environ/ANTHROPIC_API_KEY
-      temperature: 0
 
   # Deterministic stand-in for tests and keyless local runs. Never calls a provider.
   - model_name: mock-take
@@ -15,3 +14,7 @@ model_list:
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
+
+litellm_settings:
+  # Drop params a provider rejects instead of failing the call.
+  drop_params: true

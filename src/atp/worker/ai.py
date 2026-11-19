@@ -82,8 +82,10 @@ def build_request(cfg: AIFilter, job: WakeJob, model: str) -> dict[str, Any]:
     }
     return {
         "model": model,
-        "temperature": 0,
-        "max_tokens": 120,
+        # No temperature: the Messages API rejects sampling params on current models.
+        # Replays are deterministic because responses are cached by request hash.
+        # Room for adaptive thinking, which counts toward max_tokens on Haiku 5.5.
+        "max_tokens": 2048,
         "messages": [
             {"role": "system", "content": cfg.prompt + "\nReply starting with TAKE or SKIP."},
             {"role": "user", "content": json.dumps(snapshot, sort_keys=True)},
@@ -99,7 +101,7 @@ def parse_verdict(text: str) -> Literal["TAKE", "SKIP"] | None:
     head = text.strip().upper()
     words = re.findall(r"[A-Z]+", head)
     if words and words[0] in ("TAKE", "SKIP") and (len(words) < 2 or words[1] != "OR"):
-        return words[0]  # type: ignore[return-value]
+        return "TAKE" if words[0] == "TAKE" else "SKIP"
     has_take, has_skip = "TAKE" in head, "SKIP" in head
     if has_take != has_skip:
         return "TAKE" if has_take else "SKIP"

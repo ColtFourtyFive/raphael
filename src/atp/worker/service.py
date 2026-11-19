@@ -101,7 +101,11 @@ async def run_worker(
         while not stop.is_set():
             try:
                 msgs = await sub.fetch(batch=concurrency, timeout=1)
-            except NatsTimeout:
+            except (NatsTimeout, TimeoutError):  # nats-py raises either on an empty pull
+                continue
+            except Exception:
+                log.exception("fetch failed; retrying")
+                await asyncio.sleep(1)
                 continue
             for m in msgs:
                 t = asyncio.create_task(run_one(m))

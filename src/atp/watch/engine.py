@@ -33,6 +33,7 @@ from atp.db.models import Instance, Position
 from atp.indicators import compute, spec_key
 from atp.marketdata.base import load_lookback, upsert_bars
 from atp.orders import OrderManager
+from atp.orders.protect import ensure_protective_stops
 from atp.rules import evaluate_entry, evaluate_exit
 from atp.schema.agent import AgentDefinition
 from atp.schema.messages import Bar, PositionSnapshot, WakeJob
@@ -94,10 +95,18 @@ class WatchEngine:
             insts = list(
                 await s.scalars(select(Instance).where(Instance.id.in_([uuid.UUID(t) for t in set(touched)])))
             )
-        for inst in insts:
-            clock = FixedClock(bar.ts) if inst.run_id else RealClock()
-            broker = await broker_for(inst, self._factory, clock)
-            await OrderManager(self._factory, clock).sync_instance(inst.id, broker)
+        sem = asyncio.Semaphore(8)
+
+        async def sync(inst: Instance) -> None:
+            async with sem:
+                clock = FixedClock(bar.ts) if inst.run_id else RealClock()
+                broker = await broker_for(inst, self._factory, clock)
+                await OrderManager(self._factory, clock).sync_instance(inst.id, broker)
+                async with self._factory() as s:
+                    defn = await store.load_definition(s, inst.agent_id, inst.version)
+                await ensure_protective_stops(self._factory, inst, defn, broker, clock)
+
+        await asyncio.gather(*(sync(i) for i in insts))
 
     async def on_bar(self, bar: Bar) -> int:
         # 1. Fills first, so exits below see positions as of this bar's open.
@@ -210,7 +219,11 @@ async def run_watch(
         while not stop.is_set():
             try:
                 msgs = await sub.fetch(batch=200, timeout=1)
-            except NatsTimeout:
+            except (NatsTimeout, TimeoutError):  # nats-py raises either on an empty pull
+                continue
+            except Exception:
+                log.exception("fetch failed; retrying")
+                await asyncio.sleep(1)
                 continue
             for m in msgs:
                 bar = Bar.model_validate_json(m.data)

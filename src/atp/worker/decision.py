@@ -24,9 +24,10 @@ from atp import ledger, orders, risk, store
 from atp.brokers.base import Broker, BrokerAuthError, with_retry
 from atp.brokers.factory import broker_for
 from atp.clock import Clock, RealClock
-from atp.db.models import Decision, Instance, Order, RiskEvent
+from atp.db.models import Decision, Instance, Order, Position, RiskEvent
 from atp.marketdata.base import NY
 from atp.orders import OPEN_STATES, OrderManager
+from atp.orders.protect import PROTECTIVE, cancel_protective
 from atp.rules import evaluate_entry, evaluate_exit
 from atp.schema.messages import WakeJob
 from atp.worker.ai import AIFilterRunner, AIVerdict
@@ -187,7 +188,10 @@ class DecisionWorker:
                     select(func.count())
                     .select_from(Order)
                     .where(
-                        Order.instance_id == inst.id, Order.symbol == job.symbol, Order.state.in_(OPEN_STATES)
+                        Order.instance_id == inst.id,
+                        Order.symbol == job.symbol,
+                        Order.state.in_(OPEN_STATES),
+                        Order.purpose != PROTECTIVE,  # a resting stop is replaced by the exit
                     )
                 )
                 pending_buys = set(
@@ -263,13 +267,34 @@ class DecisionWorker:
 
         await self._hook("after_commit")
         if order_id is not None and rd.outcome == "approve":
+            if side == "sell" and not await self._clear_stop(inst.id, job.symbol, order_id, broker, clock):
+                return Outcome(decision_id, action, order_id)
             await om.submit(order_id, broker)
             await self._hook("after_submit")
         return Outcome(decision_id, action, order_id)
 
+    async def _clear_stop(
+        self, instance_id: uuid.UUID, symbol: str, sell_id: uuid.UUID, broker: Broker, clock: Clock
+    ) -> bool:
+        """Cancel the resting protective stop before a rule exit. If the stop already filled,
+        the position is gone: cancel our exit instead of selling shares we no longer hold."""
+        await cancel_protective(self._factory, instance_id, symbol, broker, clock)
+        async with self._factory() as s, s.begin():
+            pos = await s.get(Position, (instance_id, symbol))
+            if pos is not None and pos.qty > 0:
+                return True
+            sell = await s.get(Order, sell_id, with_for_update=True)
+            if sell is not None and sell.state == "approved":
+                orders.transition(
+                    s, sell, "canceled", clock.now(), reason="position closed by protective stop"
+                )
+        return False
+
     async def _resume(self, decision: Decision, om: OrderManager, broker: Broker) -> Outcome:
         async with self._factory() as s:
-            order = await s.scalar(select(Order).where(Order.decision_id == decision.id))
+            order = await s.scalar(
+                select(Order).where(Order.decision_id == decision.id, Order.purpose == "signal")
+            )
         if order is not None and order.state == "approved":
             log.info(
                 "resuming approved order after redelivery", extra={"client_order_id": order.client_order_id}

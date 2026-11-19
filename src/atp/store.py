@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from functools import lru_cache
 from typing import Any
@@ -14,6 +15,7 @@ from atp.db.models import Agent, AgentVersion, Instance, SystemFlag
 from atp.schema.agent import AgentDefinition
 
 KILL_SWITCH = "kill_switch"
+_DEFS: dict[tuple[str, int], AgentDefinition] = {}
 
 
 @lru_cache(maxsize=1024)
@@ -23,12 +25,16 @@ def _parse(raw: str) -> AgentDefinition:
 
 async def load_definition(session: AsyncSession, agent_id: str, version: int) -> AgentDefinition:
     """Agent versions are immutable, so parsed definitions are cached forever."""
+    cached = _DEFS.get((agent_id, version))
+    if cached is not None:
+        return cached
     row = await session.get(AgentVersion, (agent_id, version))
     if row is None:
         raise LookupError(f"agent version {agent_id}@{version} not found")
-    import json
 
-    return _parse(json.dumps(row.definition_json, sort_keys=True))
+    defn = _parse(json.dumps(row.definition_json, sort_keys=True))
+    _DEFS[(agent_id, version)] = defn
+    return defn
 
 
 async def save_definition(session: AsyncSession, defn: AgentDefinition) -> bool:

@@ -28,19 +28,28 @@ from atp.db.models import PaperOrder
 from atp.marketdata.alpaca import BarAggregator
 from atp.marketdata.base import in_regular_session
 from atp.marketdata.synthetic import synth_day
+from atp.schema.agent import AIFilter
 from atp.schema.messages import Bar, WakeJob
 from atp.worker.ai import build_request, parse_verdict, request_hash
-from atp.schema.agent import AIFilter
 
 T0 = datetime(2026, 10, 14, 13, 30, tzinfo=UTC)
 
 
 def bar(ts: datetime, o: str, h: str, lo: str, c: str, symbol: str = "SPY", tf: str = "5Min") -> Bar:
-    return Bar(symbol=symbol, timeframe=tf, ts=ts, open=Decimal(o), high=Decimal(h), low=Decimal(lo),
-               close=Decimal(c), volume=Decimal(100))
+    return Bar(
+        symbol=symbol,
+        timeframe=tf,
+        ts=ts,
+        open=Decimal(o),
+        high=Decimal(h),
+        low=Decimal(lo),
+        close=Decimal(c),
+        volume=Decimal(100),
+    )
 
 
 # --- clock ---
+
 
 async def test_simclock_as_fast_as_possible() -> None:
     c = SimClock(T0, speed=None)
@@ -63,9 +72,14 @@ def test_simclock_requires_aware_start() -> None:
 
 # --- paper fill model ---
 
+
 def order(side: str, type_: str, limit: str | None = None, stop: str | None = None) -> PaperOrder:
-    return PaperOrder(side=side, type=type_, limit_price=Decimal(limit) if limit else None,
-                      stop_price=Decimal(stop) if stop else None)
+    return PaperOrder(
+        side=side,
+        type=type_,
+        limit_price=Decimal(limit) if limit else None,
+        stop_price=Decimal(stop) if stop else None,
+    )
 
 
 def test_paper_fill_prices() -> None:
@@ -83,6 +97,7 @@ def test_paper_fill_prices() -> None:
 
 
 # --- market data ---
+
 
 def test_session_filter() -> None:
     assert in_regular_session(T0)  # 09:30 NY
@@ -114,6 +129,7 @@ def test_synthetic_is_deterministic_and_in_session() -> None:
 
 # --- AI filter helpers ---
 
+
 def test_verdict_parsing() -> None:
     assert parse_verdict("TAKE: looks fine") == "TAKE"
     assert parse_verdict("skip - too risky") == "SKIP"
@@ -123,9 +139,16 @@ def test_verdict_parsing() -> None:
 
 
 def test_request_hash_stable_and_secret_free() -> None:
-    job = WakeJob(instance_id=uuid.uuid4(), agent_id="a", version=1, symbol="SPY",
-                  bar=bar(T0, "1", "1", "1", "1"), indicators={"rsi": 25.123456}, recent_closes=["1"],
-                  trigger="entry")
+    job = WakeJob(
+        instance_id=uuid.uuid4(),
+        agent_id="a",
+        version=1,
+        symbol="SPY",
+        bar=bar(T0, "1", "1", "1", "1"),
+        indicators={"rsi": 25.123456},
+        recent_closes=["1"],
+        trigger="entry",
+    )
     cfg = AIFilter(model="m", prompt="decide")
     r1 = build_request(cfg, job, "m")
     job2 = job.model_copy(update={"instance_id": uuid.uuid4()})
@@ -135,6 +158,7 @@ def test_request_hash_stable_and_secret_free() -> None:
 
 
 # --- broker retry and Alpaca adapter ---
+
 
 async def test_with_retry_recovers_then_gives_up() -> None:
     calls = {"n": 0}
@@ -172,30 +196,52 @@ def _api_error(code: int, msg: str = "boom") -> APIError:
 
 @pytest.mark.parametrize(
     ("code", "msg", "exc"),
-    [(500, "x", BrokerTransientError), (503, "x", BrokerTransientError), (429, "x", BrokerTransientError),
-     (401, "x", BrokerAuthError), (403, "x", BrokerAuthError),
-     (422, "client_order_id must be unique", DuplicateClientOrderId), (422, "qty", BrokerRejected)],
+    [
+        (500, "x", BrokerTransientError),
+        (503, "x", BrokerTransientError),
+        (429, "x", BrokerTransientError),
+        (401, "x", BrokerAuthError),
+        (403, "x", BrokerAuthError),
+        (422, "client_order_id must be unique", DuplicateClientOrderId),
+        (422, "qty", BrokerRejected),
+    ],
 )
 async def test_alpaca_error_mapping(code: int, msg: str, exc: type[Exception]) -> None:
     def submit(_: Any) -> None:
         raise _api_error(code, msg)
 
-    b = AlpacaBroker("k", "s", live=False, allow_live_trading=False, account_is_live=False,
-                     client=SimpleNamespace(submit_order=submit))  # type: ignore[arg-type]
+    b = AlpacaBroker(
+        "k",
+        "s",
+        live=False,
+        allow_live_trading=False,
+        account_is_live=False,
+        client=SimpleNamespace(submit_order=submit),
+    )  # type: ignore[arg-type]
     with pytest.raises(exc):
-        await b.submit_order(OrderRequest(client_order_id="c", symbol="SPY", side="buy", notional=Decimal(10)))
+        await b.submit_order(
+            OrderRequest(client_order_id="c", symbol="SPY", side="buy", notional=Decimal(10))
+        )
 
 
 async def test_alpaca_timeout_is_transient(monkeypatch: pytest.MonkeyPatch) -> None:
     def slow(_: Any) -> None:
         time.sleep(0.3)
 
-    b = AlpacaBroker("k", "s", live=False, allow_live_trading=False, account_is_live=False,
-                     client=SimpleNamespace(submit_order=slow))  # type: ignore[arg-type]
+    b = AlpacaBroker(
+        "k",
+        "s",
+        live=False,
+        allow_live_trading=False,
+        account_is_live=False,
+        client=SimpleNamespace(submit_order=slow),
+    )  # type: ignore[arg-type]
     real_wait_for = asyncio.wait_for
     monkeypatch.setattr(asyncio, "wait_for", lambda aw, timeout: real_wait_for(aw, 0.05))
     with pytest.raises(BrokerTransientError):
-        await b.submit_order(OrderRequest(client_order_id="c", symbol="SPY", side="buy", notional=Decimal(10)))
+        await b.submit_order(
+            OrderRequest(client_order_id="c", symbol="SPY", side="buy", notional=Decimal(10))
+        )
 
 
 def test_order_request_needs_exactly_one_size() -> None:
@@ -206,6 +252,7 @@ def test_order_request_needs_exactly_one_size() -> None:
 
 
 # --- credentials ---
+
 
 def test_local_credential_roundtrip() -> None:
     s = Settings(local_encryption_key=Fernet.generate_key().decode())  # type: ignore[arg-type]

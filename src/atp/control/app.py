@@ -214,7 +214,6 @@ async def replays(request: Request) -> Response:
                     Instance.version,
                     func.min(Instance.created_at),
                     func.count(Instance.id),
-                    func.min(Instance.id),
                 )
                 .where(Instance.run_id.is_not(None))
                 .group_by(Instance.run_id, Instance.agent_id, Instance.version)
@@ -223,7 +222,10 @@ async def replays(request: Request) -> Response:
             )
         ).all()
         runs = []
-        for run_id, agent_id, version, created, copies, first in rows:
+        for run_id, agent_id, version, created, copies in rows:
+            first = await s.scalar(
+                select(Instance.id).where(Instance.run_id == run_id).order_by(Instance.created_at, Instance.id).limit(1)
+            )
             n_dec = await s.scalar(
                 select(func.count()).select_from(Decision).where(Decision.instance_id == first)
             )

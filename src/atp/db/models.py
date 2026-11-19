@@ -139,6 +139,8 @@ class Order(Base):
     qty: Mapped[Decimal | None]
     notional: Mapped[Decimal | None]
     type: Mapped[str] = mapped_column(String(16))  # market|limit|stop
+    # signal: decided by the worker; protective_stop: broker-native stop-loss after an entry
+    purpose: Mapped[str] = mapped_column(String(16), default="signal", server_default="signal")
     limit_price: Mapped[Decimal | None]
     stop_price: Mapped[Decimal | None]
     state: Mapped[str] = mapped_column(String(20), index=True)

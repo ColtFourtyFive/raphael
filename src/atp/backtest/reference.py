@@ -2,7 +2,8 @@
 
 Used only by the replay parity test (SPEC §9 #1). It re-implements the same trading
 semantics from scratch in one loop: evaluate at each bar's close, fill at the next
-bar's open with slippage, guardrails applied in (timestamp, symbol) order. It does not
+bar's open with slippage, a resting stop-loss from the bar after each entry fill,
+guardrails applied in (timestamp, symbol) order. It does not
 support the AI filter (parity is checked on the rules-only agent).
 """
 
@@ -20,6 +21,7 @@ from atp.schema.messages import Bar
 
 QTY = Decimal("0.000001")
 PX = Decimal("0.0001")
+CENT = Decimal("0.01")
 
 
 @dataclass
@@ -95,6 +97,8 @@ def run_reference(
     positions: dict[str, tuple[Decimal, Decimal]] = {}  # symbol -> (qty, avg)
     pending: dict[str, tuple[str, datetime]] = {}  # symbol -> (side, decided bar ts)
     realized = Decimal(0)
+    stop_pct = next((c.value for c in defn.exit.any if isinstance(c, StopLossPct)), None)
+    stops: dict[str, tuple[Decimal, datetime, datetime]] = {}  # symbol -> (stop, entry decided, active from)
     trades: list[Trade] = []
     history: dict[str, list[Bar]] = {}
     by_key = {(b.symbol, b.ts): b for b in [*warmup, *day]}
@@ -105,7 +109,17 @@ def run_reference(
         history.setdefault(sym, []).append(bar)
         if bar.ts not in day_ts:
             continue
-        # fill yesterday's decision at this bar's open
+        # a resting stop-loss (placed after the entry fill, active from the next bar)
+        if sym in stops and sym not in pending:
+            stop_px, entry_decided, active_from = stops[sym]
+            if bar.ts >= active_from and bar.low <= stop_px:
+                price = min(bar.open, stop_px)
+                qty, avg = positions.pop(sym)
+                del stops[sym]
+                cash += qty * price
+                realized += qty * price - qty * avg
+                trades.append(Trade(sym, "sell", entry_decided, qty, price))
+        # fill the previous bar's decision at this bar's open
         if sym in pending:
             side, decided = pending.pop(sym)
             if side == "buy":
@@ -113,6 +127,9 @@ def run_reference(
                 qty = (defn.sizing.usd / price).quantize(QTY, rounding=ROUND_DOWN)
                 cash -= qty * price
                 positions[sym] = (qty, price)
+                if stop_pct is not None:
+                    stop_px = (price * (1 - Decimal(str(stop_pct)) / 100)).quantize(CENT, rounding=ROUND_DOWN)
+                    stops[sym] = (stop_px, decided, bar.ts + step)
             else:
                 price = (bar.open * (1 - slip)).quantize(PX)
                 qty, avg = positions.pop(sym)
@@ -139,6 +156,7 @@ def run_reference(
                     fire |= chg >= c.value
             if fire:
                 pending[sym] = ("sell", bar.ts)
+                stops.pop(sym, None)  # the exit replaces the resting stop
         elif all(_cmp(c, vals) for c in defn.entry.all):
             busy = set(positions) | {s for s, (side, _) in pending.items() if side == "buy"}
             # `realized` covers exactly the one replayed day, matching the daily-loss rule.
